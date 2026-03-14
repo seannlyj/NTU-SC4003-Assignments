@@ -1,5 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import time
+from matplotlib.patches import Rectangle
 
 gamma = 0.99
 p_intended = 0.8
@@ -20,6 +22,11 @@ side_actions = {
     'R': ['U','D']
 }
 
+# Grid representation:
+# 1  = green (+1 reward)
+# -1 = brown (-1 reward)
+# 0  = white (-0.05 reward)
+# None = wall
 grid = [
     [1, None, 1, 0, 0, 1],
     [0,-1,0,1,None,-1],
@@ -34,6 +41,7 @@ cols = 6
 
 reward = np.zeros((rows,cols))
 
+# Reward array: NaN for walls
 for r in range(rows):
     for c in range(cols):
         if grid[r][c] == None:
@@ -50,7 +58,7 @@ start_state = (3, 2)
 
 # HELPER FUNCTIONS
 # check if (r,c) is inside grid and not a wall
-def valid(r, c):
+def is_valid(r, c):
     if r < 0 or r >= rows or c < 0 or c >= cols:
         return False
     return grid[r][c] is not None
@@ -59,16 +67,15 @@ def valid(r, c):
 def move(r, c, action):
     dr, dc = action_vectors[action]
     nr, nc = r + dr, c + dc
-    if valid(nr, nc):
+    if is_valid(nr, nc):
         return nr, nc
     return r, c
 
 # compute sum_{s'} P(s'|s,a) * U(s') for state (r,c) and action a.
 def expected_utility(U, r, c, a):
-    total = 0
     # Intended direction
     nr, nc = move(r, c, a)
-    total += p_intended * U[nr, nc]
+    total = p_intended * U[nr, nc]
     # Two perpendicular directions
     for sa in side_actions[a]:
         nr, nc = move(r, c, sa)
@@ -76,12 +83,11 @@ def expected_utility(U, r, c, a):
     return total
 
 # VALUE ITERATION
-def value_iteration():
+def value_iteration(track_states):
     
     # Initialize all U(s) = 0
-    U = np.zeros((rows,cols))
-    history_avg = []      # average utility over non-wall states
-    history_start = []    # utility of start state
+    U = np.zeros((rows, cols))
+    hist_track = {s: [] for s in track_states if is_valid(*s)} # dict mapping each tracked state to a list of utilities per iteration
     
     # Iterate until convergence
     for iteration in range(5000):
@@ -90,42 +96,38 @@ def value_iteration():
         for r in range(rows):
             for c in range(cols):
                 
-                if grid[r][c] is None:
+                if not is_valid(r, c):
                     continue
-                
                 best = -1e9
-                
                 for a in actions:
-                    val = expected_utility(U,r,c,a)     # expected utility of taking action a in state (r,c)
-                    best = max(best,val)                # max(Summation(P(s'|s,a)*U(s')))
-                
-                U_new[r,c] = reward[r,c] + gamma*best   # U(s) = R(s) + gamma*max(Summation(P(s'|s,a)*U(s')))
+                    val = expected_utility(U, r, c, a)      # expected utility of taking action a in state (r,c)
+                    if val > best:                          # max(Summation(P(s'|s,a)*U(s')))
+                        best = val
+                U_new[r, c] = reward[r, c] + gamma * best   # U(s) = R(s) + gamma*max(Summation(P(s'|s,a)*U(s')))
         
-        # Record metrics
-        history_avg.append(np.mean(U_new[~np.isnan(reward)]))
-        history_start.append(U_new[start_state])
+        # Record utilities for tracked states
+        for (r, c) in hist_track.keys():
+            hist_track[(r, c)].append(U_new[r, c])
         
-        # Check for convergence
+        # Check convergence
         delta = np.max(np.abs(U_new - U))
         if delta < 1e-4:
             break
-            
         U = U_new
-        
-    return U, history_avg, history_start
+            
+    return U, hist_track
 
 # POLICY ITERATION
-def policy_iteration():
+def policy_iteration(track_states):
     # Initialize random policy
     policy = np.random.choice(actions,(rows,cols))
     for r in range(rows):
         for c in range(cols):
-            if grid[r][c] is None:
-                policy[r,c] = 'W'
+            if not is_valid(r, c):
+                policy[r, c] = 'W'
 
     U = np.zeros((rows, cols))
-    history_avg = []
-    history_start = []
+    outer_hist = {s: [] for s in track_states if is_valid(*s)}
     stable = False
 
     while not stable:
@@ -138,26 +140,27 @@ def policy_iteration():
             for r in range(rows):
                 for c in range(cols):
 
-                    if grid[r][c] is None:
+                    if not is_valid(r, c):
                         continue
 
                     a = policy[r,c]
-                    U_new[r,c] = reward[r,c] + gamma * expected_utility(U,r,c,a) # U(s) = R(s) + gamma*[summation(P(s'|s,a)*U(s'))]
+                    U_new[r, c] = reward[r, c] + gamma * expected_utility(U, r, c, a) # U(s) = R(s) + gamma*[summation(P(s'|s,a)*U(s'))]
 
             delta = np.max(np.abs(U_new - U))
             U = U_new
-            history_avg.append(np.mean(U[~np.isnan(reward)]))
-            history_start.append(U[start_state])
-            
             if delta < 1e-4:
                 break
+
+        # Record utilities after this evaluation (outer loop)
+        for (r, c) in outer_hist.keys():
+            outer_hist[(r, c)].append(U[r, c])
 
         # POLICY IMPROVEMENT
         stable = True
         for r in range(rows):
             for c in range(cols):
 
-                if grid[r][c] is None:
+                if not is_valid(r, c):
                     continue
 
                 old_action = policy[r,c]
@@ -179,7 +182,7 @@ def policy_iteration():
                 if best_action != old_action:
                     stable = False
 
-    return policy, U, history_avg, history_start
+    return policy, U, outer_hist
 
 def extract_policy(U):
     
@@ -188,7 +191,7 @@ def extract_policy(U):
     for r in range(rows):
         for c in range(cols):
             
-            if grid[r][c] is None:
+            if not is_valid(r, c):
                 policy[r][c] = 'W'
                 continue
                 
@@ -207,96 +210,81 @@ def extract_policy(U):
 
 
 def plot_policy(policy, title):
-
-    arrow_map = {
-        'U': '↑',
-        'D': '↓',
-        'L': '←',
-        'R': '→',
-        'W': '■'
-    }
-
+    """Display the policy as arrows in a grid."""
+    arrow_map = {'U': '↑', 'D': '↓', 'L': '←', 'R': '→', 'W': '■'}
     fig, ax = plt.subplots(figsize=(cols, rows))
-
-    # Draw arrows / walls
     for r in range(rows):
         for c in range(cols):
-
-            if grid[r][c] is None:
-                symbol = '■'
+            cell_val = grid[r][c]
+            if cell_val is None:
+                face_color = 'lightgrey'
+            elif cell_val == -1:
+                face_color = 'orange'
+            elif cell_val == 1:
+                face_color = 'green'
             else:
-                symbol = arrow_map[policy[r][c]]
+                face_color = 'white'
 
-            ax.text(
-                c + 0.5,
-                rows - r - 0.5,
-                symbol,
-                ha='center',
-                va='center',
-                fontsize=18
-            )
-
-    # Set limits
+            ax.add_patch(Rectangle((c, rows - r - 1), 1, 1, facecolor=face_color, edgecolor='none'))
+            symbol = arrow_map[policy[r][c]] if policy[r][c] in arrow_map else '?'
+            ax.text(c + 0.5, rows - r - 0.5, symbol, ha='center', va='center', fontsize=18)
     ax.set_xlim(0, cols)
     ax.set_ylim(0, rows)
-
-    # Equal cell size
     ax.set_aspect('equal')
-
-    # Create table-style grid
-    ax.set_xticks(np.arange(0, cols + 1, 1))
-    ax.set_yticks(np.arange(0, rows + 1, 1))
+    ax.set_xticks(np.arange(0, cols+1, 1))
+    ax.set_yticks(np.arange(0, rows+1, 1))
     ax.grid(True)
-
-    # Remove tick labels
     ax.set_xticklabels([])
     ax.set_yticklabels([])
-
     ax.set_title(title)
-
     plt.show()
 
+def plot_convergence(hist_dict, title):
+    """Plot utility estimates of several states over iterations."""
+    plt.figure()
+    for state, values in hist_dict.items():
+        plt.plot(values, label=f'State {state}')
+    plt.xlabel('Iteration')
+    plt.ylabel('Utility')
+    plt.title(title)
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+
+# Choose a few representative states to track (including start state)
+tracked = [(4, 3), (3, 3), (1, 1), (3, 1), (4, 1)]
+tracked = [s for s in tracked if is_valid(*s)]          # remove any that are walls
 
 print("Running Value Iteration...")
-U_vi, vi_avg, vi_start = value_iteration()
+U_vi, hist_vi = value_iteration(tracked)
 policy_vi = extract_policy(U_vi)
 
 print("Running Policy Iteration...")
-policy_pi, U_pi, pi_avg, pi_start = policy_iteration()
+policy_pi, U_pi, hist_pi = policy_iteration(tracked)
 
-# Display results
-print("\nUtilities from Value Iteration:")
+# Print results
+print("\n" + "="*50)
+print("Value Iteration Results")
+print("="*50)
+print("\nUtilities of all states (rounded to 3 decimals):")
 print(np.round(U_vi, 3))
-print("\nOptimal Policy (Value Iteration):")
+print("\nOptimal policy (↑ ↓ ← →, ■ = wall):")
 for row in policy_vi:
-    print(row)
+    print(' '.join(row))
 
-print("\nUtilities from Policy Iteration:")
+print("\n" + "="*50)
+print("Policy Iteration Results")
+print("="*50)
+print("\nUtilities of all states (rounded to 3 decimals):")
 print(np.round(U_pi, 3))
-print("\nOptimal Policy (Policy Iteration):")
+print("\nOptimal policy (↑ ↓ ← →, ■ = wall):")
 for row in policy_pi:
-    print(row)
+    print(' '.join(row))
 
 # Plot policies
 plot_policy(policy_vi, "Optimal Policy (Value Iteration)")
 plot_policy(policy_pi, "Optimal Policy (Policy Iteration)")
 
-# Plot utility estimates for the start state
-plt.figure()
-plt.plot(vi_start, label='Value Iteration')
-plt.plot(pi_start, label='Policy Iteration')
-plt.xlabel("Iteration")
-plt.ylabel("Utility of Start State")
-plt.title("Utility Estimates vs Iterations")
-plt.legend()
-plt.show()
-
-# Also plot average utility (optional)
-plt.figure()
-plt.plot(vi_avg, label='Value Iteration')
-plt.plot(pi_avg, label='Policy Iteration')
-plt.xlabel("Iteration")
-plt.ylabel("Average Utility")
-plt.title("Average Utility vs Iterations")
-plt.legend()
-plt.show()
+# Plot convergence of utilities
+plot_convergence(hist_vi, "Value Iteration – Utility Estimates")
+plot_convergence(hist_pi, "Policy Iteration – Utility Estimates")
