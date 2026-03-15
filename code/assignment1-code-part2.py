@@ -27,8 +27,9 @@ side_actions = {
 # -1 = brown (-1 reward)
 # 0  = white (-0.05 reward)
 # None = wall
-def generate_random_grid(rows, cols, wall_prob=0.2, green_count=2, brown_count=2, rng_seed=None):
-    """Generate a random grid with walls, terminal rewards, and a valid start state."""
+
+# Generate a random grid with specified parameters, ensuring at least one valid start state and enough terminal states.
+def generate_random_grid(rows, cols, wall_prob=0.5, green_count=3, brown_count=3, rng_seed=None):
     rng = np.random.default_rng(rng_seed)
 
     generated_grid = [[0 for _ in range(cols)] for _ in range(rows)]
@@ -55,6 +56,8 @@ def generate_random_grid(rows, cols, wall_prob=0.2, green_count=2, brown_count=2
 
 
 def build_reward_matrix(env_grid):
+    rows = len(env_grid)
+    cols = len(env_grid[0])
     reward_matrix = np.zeros((rows, cols))
     for r in range(rows):
         for c in range(cols):
@@ -68,98 +71,89 @@ def build_reward_matrix(env_grid):
                 reward_matrix[r, c] = -0.05
     return reward_matrix
 
-
-rows = 10
-cols = 10
-
-grid, start_state = generate_random_grid(rows, cols, wall_prob=0.2, green_count=2, brown_count=2)
-reward = build_reward_matrix(grid)
-
-
-# HELPER FUNCTIONS
-def run_experiment(env_grid):
-    start_time = time.time()
-    U_vi, hist_vi = value_iteration(tracked)
-    vi_time = time.time() - start_time
-
-    start_time = time.time()
-    policy_pi, U_pi, hist_pi = policy_iteration(tracked)
-    pi_time = time.time() - start_time
-
-    print(f"Value iteration: {len(hist_vi[tracked[0]])} iterations, {vi_time:.2f} sec")
-    print(f"Policy iteration: {len(hist_pi[tracked[0]])} outer loops, {pi_time:.2f} sec")
-
 # check if (r,c) is inside grid and not a wall
-def is_valid(r, c):
+def is_valid(env_grid, r, c):
+    rows = len(env_grid)
+    cols = len(env_grid[0])
     if r < 0 or r >= rows or c < 0 or c >= cols:
         return False
-    return grid[r][c] is not None
+    return env_grid[r][c] is not None
 
 # return new coordinates after attempting action, stays in place if move is invalid
-def move(r, c, action):
+def move(env_grid, r, c, action):
     dr, dc = action_vectors[action]
     nr, nc = r + dr, c + dc
-    if is_valid(nr, nc):
+    if is_valid(env_grid, nr, nc):
         return nr, nc
     return r, c
 
 # compute sum_{s'} P(s'|s,a) * U(s') for state (r,c) and action a.
-def expected_utility(U, r, c, a):
+def expected_utility(U, env_grid, r, c, a):
     # Intended direction
-    nr, nc = move(r, c, a)
+    nr, nc = move(env_grid, r, c, a)
     total = p_intended * U[nr, nc]
     # Two perpendicular directions
     for sa in side_actions[a]:
-        nr, nc = move(r, c, sa)
+        nr, nc = move(env_grid, r, c, sa)
         total += p_side * U[nr, nc]
     return total
 
 # VALUE ITERATION
-def value_iteration(track_states):
+def value_iteration(env_grid, reward_matrix, track_states, max_iterations=5000, tol=1e-4):
+    rows = len(env_grid)
+    cols = len(env_grid[0])
     
     # Initialize all U(s) = 0
     U = np.zeros((rows, cols))
-    hist_track = {s: [] for s in track_states if is_valid(*s)} # dict mapping each tracked state to a list of utilities per iteration
+    hist_track = {s: [] for s in track_states if is_valid(env_grid, *s)} # dict mapping each tracked state to a list of utilities per iteration
+    avg_utility_history = []
+    valid_cells = ~np.isnan(reward_matrix)
     
     # Iterate until convergence
-    for iteration in range(5000):
+    for iteration in range(max_iterations):
         U_new = U.copy()
         
         for r in range(rows):
             for c in range(cols):
                 
-                if not is_valid(r, c):
+                if not is_valid(env_grid, r, c):
                     continue
                 best = -1e9
                 for a in actions:
-                    val = expected_utility(U, r, c, a)      # expected utility of taking action a in state (r,c)
+                    val = expected_utility(U, env_grid, r, c, a)      # expected utility of taking action a in state (r,c)
                     if val > best:                          # max(Summation(P(s'|s,a)*U(s')))
                         best = val
-                U_new[r, c] = reward[r, c] + gamma * best   # U(s) = R(s) + gamma*max(Summation(P(s'|s,a)*U(s')))
+                U_new[r, c] = reward_matrix[r, c] + gamma * best   # U(s) = R(s) + gamma*max(Summation(P(s'|s,a)*U(s')))
         
         # Record utilities for tracked states
         for (r, c) in hist_track.keys():
             hist_track[(r, c)].append(U_new[r, c])
+        avg_utility_history.append(np.mean(U_new[valid_cells]))
         
         # Check convergence
         delta = np.max(np.abs(U_new - U))
-        if delta < 1e-4:
+        if delta < tol:
             break
         U = U_new
             
-    return U, hist_track
+    return U, hist_track, avg_utility_history
 
 # POLICY ITERATION
-def policy_iteration(track_states):
+def policy_iteration(env_grid, reward_matrix, track_states, tol=1e-4):
+    rows = len(env_grid)
+    cols = len(env_grid[0])
+
     # Initialize random policy
-    policy = np.random.choice(actions,(rows,cols))
+    policy = np.random.choice(actions, (rows, cols))
     for r in range(rows):
         for c in range(cols):
-            if not is_valid(r, c):
+            if not is_valid(env_grid, r, c):
                 policy[r, c] = 'W'
 
     U = np.zeros((rows, cols))
-    outer_hist = {s: [] for s in track_states if is_valid(*s)}
+    outer_hist = {s: [] for s in track_states if is_valid(env_grid, *s)}
+    avg_utility_history = []
+    valid_cells = ~np.isnan(reward_matrix)
     stable = False
 
     while not stable:
@@ -172,27 +166,28 @@ def policy_iteration(track_states):
             for r in range(rows):
                 for c in range(cols):
 
-                    if not is_valid(r, c):
+                    if not is_valid(env_grid, r, c):
                         continue
 
                     a = policy[r,c]
-                    U_new[r, c] = reward[r, c] + gamma * expected_utility(U, r, c, a) # U(s) = R(s) + gamma*[summation(P(s'|s,a)*U(s'))]
+                    U_new[r, c] = reward_matrix[r, c] + gamma * expected_utility(U, env_grid, r, c, a) # U(s) = R(s) + gamma*[summation(P(s'|s,a)*U(s'))]
 
             delta = np.max(np.abs(U_new - U))
             U = U_new
-            if delta < 1e-4:
+            if delta < tol:
                 break
 
         # Record utilities after this evaluation (outer loop)
         for (r, c) in outer_hist.keys():
             outer_hist[(r, c)].append(U[r, c])
+        avg_utility_history.append(np.mean(U[valid_cells]))
 
         # POLICY IMPROVEMENT
         stable = True
         for r in range(rows):
             for c in range(cols):
 
-                if not is_valid(r, c):
+                if not is_valid(env_grid, r, c):
                     continue
 
                 old_action = policy[r,c]
@@ -202,7 +197,7 @@ def policy_iteration(track_states):
 
                 for a in actions:
                     #Summation(P(s'|s,a)*U(s'))
-                    val = expected_utility(U,r,c,a)
+                    val = expected_utility(U, env_grid, r, c, a)
 
                      # argmax(Summation(P(s'|s,a)*U(s')))
                     if val > best_val:
@@ -214,16 +209,18 @@ def policy_iteration(track_states):
                 if best_action != old_action:
                     stable = False
 
-    return policy, U, outer_hist
+    return policy, U, outer_hist, avg_utility_history
 
-def extract_policy(U):
+def extract_policy(U, env_grid):
+    rows = len(env_grid)
+    cols = len(env_grid[0])
     
     policy = [['' for _ in range(cols)] for _ in range(rows)]
     
     for r in range(rows):
         for c in range(cols):
             
-            if not is_valid(r, c):
+            if not is_valid(env_grid, r, c):
                 policy[r][c] = 'W'
                 continue
                 
@@ -231,7 +228,7 @@ def extract_policy(U):
             best_val = -1e9
             
             for a in actions:
-                val = expected_utility(U,r,c,a)
+                val = expected_utility(U, env_grid, r, c, a)
                 if val > best_val:
                     best_val = val
                     best_action = a
@@ -241,13 +238,15 @@ def extract_policy(U):
     return policy
 
 
-def plot_policy(policy, title):
-    """Display the policy as arrows in a grid."""
+# DIsplay policy as arrows in grid
+def plot_policy(policy, env_grid, title):
+    rows = len(env_grid)
+    cols = len(env_grid[0])
     arrow_map = {'U': '↑', 'D': '↓', 'L': '←', 'R': '→', 'W': '■'}
     fig, ax = plt.subplots(figsize=(cols, rows))
     for r in range(rows):
         for c in range(cols):
-            cell_val = grid[r][c]
+            cell_val = env_grid[r][c]
             if cell_val is None:
                 face_color = 'lightgrey'
             elif cell_val == -1:
@@ -271,8 +270,8 @@ def plot_policy(policy, title):
     ax.set_title(title)
     plt.show()
 
+# Plot utility estimates of tracked states over iterations
 def plot_convergence(hist_dict, title):
-    """Plot utility estimates of several states over iterations."""
     plt.figure()
     for state, values in hist_dict.items():
         plt.plot(values, label=f'State {state}')
@@ -283,52 +282,136 @@ def plot_convergence(hist_dict, title):
     plt.grid(True)
     plt.show()
 
-# Choose a few representative states to track (including start state)
-tracked = [(0, 0), (0, cols - 1), (rows - 1, 0), (rows - 1, cols - 1), start_state]   # corners + start
-tracked = list(dict.fromkeys(tracked))
-tracked = [s for s in tracked if is_valid(*s)]
+maze_sizes = [30, 40, 50, 100]
 
-print(f"Running on random {rows}x{cols} maze...")
-start = time.time()
-U_vi, hist_vi = value_iteration(tracked)
-vi_time = time.time() - start
-print(f"Value iteration: {len(hist_vi[tracked[0]])} iterations, {vi_time:.2f} sec")
+comparison_vi_iters = []
+comparison_pi_iters = []
+comparison_vi_times = []
+comparison_pi_times = []
+comparison_vi_avg_utils_by_size = {}
+comparison_pi_avg_utils_by_size = {}
 
-start = time.time()
-policy_pi, U_pi, hist_pi = policy_iteration(tracked)
-pi_time = time.time() - start
-print(f"Policy iteration: {len(hist_pi[tracked[0]])} outer loops, {pi_time:.2f} sec")
+for maze_size in maze_sizes:
+    rows = maze_size
+    cols = maze_size
 
-print("Running Value Iteration...")
-U_vi, hist_vi = value_iteration(tracked)
-policy_vi = extract_policy(U_vi)
+    grid, start_state = generate_random_grid(
+        rows,
+        cols,
+        wall_prob=0.2,
+        green_count=20,
+        brown_count=20,
+        rng_seed=maze_size,
+    )
+    reward = build_reward_matrix(grid)
 
-print("Running Policy Iteration...")
-policy_pi, U_pi, hist_pi = policy_iteration(tracked)
+    # Randomly select 5 valid (non-wall) states to track
+    valid_states = [(r, c) for r in range(rows) for c in range(cols) if is_valid(grid, r, c)]
+    track_count = min(5, len(valid_states))
+    state_rng = np.random.default_rng(maze_size + 1000)
+    selected_indices = state_rng.choice(len(valid_states), size=track_count, replace=False)
+    tracked = [valid_states[i] for i in selected_indices]
 
-# Print results
-print("\n" + "="*50)
-print("Value Iteration Results")
-print("="*50)
-print("\nUtilities of all states (rounded to 3 decimals):")
-print(np.round(U_vi, 3))
-print("\nOptimal policy (↑ ↓ ← →, ■ = wall):")
-for row in policy_vi:
-    print(' '.join(row))
+    print(f"\nRunning on random {rows}x{cols} maze...")
 
-print("\n" + "="*50)
-print("Policy Iteration Results")
-print("="*50)
-print("\nUtilities of all states (rounded to 3 decimals):")
-print(np.round(U_pi, 3))
-print("\nOptimal policy (↑ ↓ ← →, ■ = wall):")
-for row in policy_pi:
-    print(' '.join(row))
+    print("Running Value Iteration...")
+    start = time.time()
+    U_vi, hist_vi, vi_avg_utility_history = value_iteration(grid, reward, tracked)
+    vi_time = time.time() - start
+    policy_vi = extract_policy(U_vi, grid)
 
-# Plot policies
-plot_policy(policy_vi, "Optimal Policy (Value Iteration)")
-plot_policy(policy_pi, "Optimal Policy (Policy Iteration)")
+    print("Running Policy Iteration...")
+    start = time.time()
+    policy_pi, U_pi, hist_pi, pi_avg_utility_history = policy_iteration(grid, reward, tracked)
+    pi_time = time.time() - start
 
-# Plot convergence of utilities
-plot_convergence(hist_vi, "Value Iteration – Utility Estimates")
-plot_convergence(hist_pi, "Policy Iteration – Utility Estimates")
+    vi_iters = max((len(values) for values in hist_vi.values()), default=0)
+    pi_iters = max((len(values) for values in hist_pi.values()), default=0)
+
+    comparison_vi_iters.append(vi_iters)
+    comparison_pi_iters.append(pi_iters)
+    comparison_vi_times.append(vi_time)
+    comparison_pi_times.append(pi_time)
+    comparison_vi_avg_utils_by_size[maze_size] = vi_avg_utility_history
+    comparison_pi_avg_utils_by_size[maze_size] = pi_avg_utility_history
+
+    print(f"Value iteration: {vi_iters} iterations, {vi_time:.2f} sec")
+    print(f"Policy iteration: {pi_iters} outer loops, {pi_time:.2f} sec")
+
+    # Print results
+    print("\n" + "="*50)
+    print(f"Value Iteration Results ({rows}x{cols})")
+    print("="*50)
+    print("\nUtilities of all states (rounded to 3 decimals):")
+    print(np.round(U_vi, 3))
+    print("\nOptimal policy (↑ ↓ ← →, ■ = wall):")
+    for row in policy_vi:
+        print(' '.join(row))
+
+    print("\n" + "="*50)
+    print(f"Policy Iteration Results ({rows}x{cols})")
+    print("="*50)
+    print("\nUtilities of all states (rounded to 3 decimals):")
+    print(np.round(U_pi, 3))
+    print("\nOptimal policy (↑ ↓ ← →, ■ = wall):")
+    for row in policy_pi:
+        print(' '.join(row))
+
+    # Plot per-grid policies
+    plot_policy(policy_vi, grid, f"Optimal Policy (Value Iteration) - {rows}x{cols}")
+    plot_policy(policy_pi, grid, f"Optimal Policy (Policy Iteration) - {rows}x{cols}")
+
+    # Plot per-grid utility convergence
+    plot_convergence(hist_vi, f"Value Iteration – Utility Estimates ({rows}x{cols})")
+    plot_convergence(hist_pi, f"Policy Iteration – Utility Estimates ({rows}x{cols})")
+
+
+# Final comparison plots across maze sizes
+fig, axes = plt.subplots(1, 2, figsize=(12, 4.5))
+
+axes[0].plot(maze_sizes, comparison_vi_iters, marker='o', label='Value Iteration')
+axes[0].plot(maze_sizes, comparison_pi_iters, marker='s', label='Policy Iteration')
+axes[0].set_xlabel('Maze size (N for NxN)')
+axes[0].set_ylabel('Iterations to converge')
+axes[0].set_title('Iterations vs Maze Size')
+axes[0].set_xticks(maze_sizes)
+axes[0].grid(True)
+axes[0].legend()
+
+axes[1].plot(maze_sizes, comparison_vi_times, marker='o', label='Value Iteration')
+axes[1].plot(maze_sizes, comparison_pi_times, marker='s', label='Policy Iteration')
+axes[1].set_xlabel('Maze size (N for NxN)')
+axes[1].set_ylabel('Runtime (seconds)')
+axes[1].set_title('Runtime vs Maze Size')
+axes[1].set_xticks(maze_sizes)
+axes[1].grid(True)
+axes[1].legend()
+
+plt.tight_layout()
+plt.show()
+
+# Final average-utility tracking plots (different colored lines by maze size)
+fig, axes = plt.subplots(1, 2, figsize=(14, 4.5))
+
+for maze_size in maze_sizes:
+    vi_series = comparison_vi_avg_utils_by_size[maze_size]
+    axes[0].plot(np.arange(1, len(vi_series) + 1), vi_series, label=f'{maze_size}x{maze_size}')
+    
+axes[0].set_xlabel('Iteration')
+axes[0].set_ylabel('Average utility (valid cells)')
+axes[0].set_title('Value Iteration: Avg Utility over Iterations')
+axes[0].grid(True)
+axes[0].legend()
+
+for maze_size in maze_sizes:
+    pi_series = comparison_pi_avg_utils_by_size[maze_size]
+    axes[1].plot(np.arange(1, len(pi_series) + 1), pi_series, label=f'{maze_size}x{maze_size}')
+
+axes[1].set_xlabel('Outer Policy Iteration Loop')
+axes[1].set_ylabel('Average utility (valid cells)')
+axes[1].set_title('Policy Iteration: Avg Utility over Iterations')
+axes[1].grid(True)
+axes[1].legend()
+
+plt.tight_layout()
+plt.show()

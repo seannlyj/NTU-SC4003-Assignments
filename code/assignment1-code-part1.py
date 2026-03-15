@@ -252,7 +252,7 @@ def plot_convergence(hist_dict, title):
     plt.show()
 
 # Choose a few representative states to track (including start state)
-tracked = [(4, 3), (3, 3), (1, 1), (3, 1), (4, 1)]
+tracked = [(5, 3), (3, 3), (1, 1), (3, 1), (2, 1)]
 tracked = [s for s in tracked if is_valid(*s)]          # remove any that are walls
 
 print("Running Value Iteration...")
