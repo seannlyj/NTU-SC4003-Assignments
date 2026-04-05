@@ -54,7 +54,7 @@ def generate_random_grid(rows, cols, wall_prob=0.5, green_count=3, brown_count=3
 
     return generated_grid, start
 
-
+# Build the reward matrix from the grid representation, using NaN for walls.
 def build_reward_matrix(env_grid):
     rows = len(env_grid)
     cols = len(env_grid[0])
@@ -211,6 +211,7 @@ def policy_iteration(env_grid, reward_matrix, track_states, tol=1e-4):
 
     return policy, U, outer_hist, avg_utility_history
 
+# Given a utility function U, extract the optimal policy by choosing the action with the highest expected utility in each state.
 def extract_policy(U, env_grid):
     rows = len(env_grid)
     cols = len(env_grid[0])
@@ -282,8 +283,10 @@ def plot_convergence(hist_dict, title):
     plt.grid(True)
     plt.show()
 
+# Different maze sizes to run
 maze_sizes = [30, 40, 50, 100]
 
+# Comparison data structures
 comparison_vi_iters = []
 comparison_pi_iters = []
 comparison_vi_times = []
@@ -291,6 +294,7 @@ comparison_pi_times = []
 comparison_vi_avg_utils_by_size = {}
 comparison_pi_avg_utils_by_size = {}
 
+# for each maze, generate random grid, run value iteration and policy iteration, track results, and plot policies and convergence
 for maze_size in maze_sizes:
     rows = maze_size
     cols = maze_size

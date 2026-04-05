@@ -184,6 +184,7 @@ def policy_iteration(track_states):
 
     return policy, U, outer_hist
 
+# Given a utility function U, extract the optimal policy by choosing the action with the highest expected utility in each state.
 def extract_policy(U):
     
     policy = [['' for _ in range(cols)] for _ in range(rows)]
@@ -209,8 +210,9 @@ def extract_policy(U):
     return policy
 
 
+# PLOTTING FUNCTIONS
+# For the policy, we will use arrows to indicate the action in each cell. Walls will be shown as filled squares.
 def plot_policy(policy, title):
-    """Display the policy as arrows in a grid."""
     arrow_map = {'U': '↑', 'D': '↓', 'L': '←', 'R': '→', 'W': '■'}
     fig, ax = plt.subplots(figsize=(cols, rows))
     for r in range(rows):
@@ -239,8 +241,8 @@ def plot_policy(policy, title):
     ax.set_title(title)
     plt.show()
 
+# For convergence plots, we will plot the utility estimates of the tracked states over iterations.
 def plot_convergence(hist_dict, title):
-    """Plot utility estimates of several states over iterations."""
     plt.figure()
     for state, values in hist_dict.items():
         plt.plot(values, label=f'State {state}')
