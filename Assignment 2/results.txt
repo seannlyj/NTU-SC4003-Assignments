@@ -1,0 +1,111 @@
+=================================================================
+THREE-PLAYER PRISONER'S DILEMMA  |  Neo_Sean_Player  |  5 runs
+=================================================================
+
+--- Run 1 ---
+  Player                    Total Score
+  --------------------------------------
+  Neo_Sean_Player           168.42
+  T4TPlayer                 165.60
+  TolerantPlayer            163.44
+  NicePlayer                159.69
+  NastyPlayer               145.59
+  RandomPlayer              143.68
+  FreakyPlayer              139.80
+
+--- Run 2 ---
+  Player                    Total Score
+  --------------------------------------
+  Neo_Sean_Player           171.01
+  TolerantPlayer            168.48
+  T4TPlayer                 164.67
+  NastyPlayer               153.09
+  NicePlayer                152.11
+  FreakyPlayer              150.72
+  RandomPlayer              126.08
+
+--- Run 3 ---
+  Player                    Total Score
+  --------------------------------------
+  T4TPlayer                 161.32
+  Neo_Sean_Player           161.09
+  TolerantPlayer            160.23
+  NicePlayer                156.12
+  RandomPlayer              138.55
+  NastyPlayer               136.86
+  FreakyPlayer              133.60
+
+--- Run 4 ---
+  Player                    Total Score
+  --------------------------------------
+  T4TPlayer                 170.66
+  Neo_Sean_Player           166.60
+  TolerantPlayer            166.27
+  FreakyPlayer              145.91
+  NastyPlayer               142.85
+  NicePlayer                140.14
+  RandomPlayer              135.64
+
+--- Run 5 ---
+  Player                    Total Score
+  --------------------------------------
+  TolerantPlayer            173.67
+  Neo_Sean_Player           169.08
+  T4TPlayer                 164.84
+  FreakyPlayer              156.33
+  NicePlayer                152.32
+  NastyPlayer               147.22
+  RandomPlayer              135.92
+
+=================================================================
+SECTION 1 ? AVERAGE OVERALL RANKING  (5 runs)
+=================================================================
+  Rank   Player                    Avg Total Score
+  ---------------------------------------------
+  1      Neo_Sean_Player                 167.24
+  2      TolerantPlayer                  166.42
+  3      T4TPlayer                       165.42
+  4      NicePlayer                      152.08
+  5      FreakyPlayer                    145.27
+  6      NastyPlayer                     145.12
+  7      RandomPlayer                    135.97
+
+=================================================================
+SECTION 2 ? NEO_SEAN_PLAYER MATCHUP SCORES  (avg over all runs)
+=================================================================
+  Opponent 1             Opponent 2              Neo Avg Score
+  ------------------------------------------------------------
+  NicePlayer             NicePlayer                       6.00
+  NicePlayer             NastyPlayer                      4.98
+  NicePlayer             RandomPlayer                     5.47
+  NicePlayer             TolerantPlayer                   6.00
+  NicePlayer             FreakyPlayer                     5.80
+  NicePlayer             T4TPlayer                        6.00
+  NicePlayer             Neo_Sean_Player                  6.00
+  NastyPlayer            NastyPlayer                      1.96
+  NastyPlayer            RandomPlayer                     3.42
+  NastyPlayer            TolerantPlayer                   2.02
+  NastyPlayer            FreakyPlayer                     4.37
+  NastyPlayer            T4TPlayer                        2.01
+  NastyPlayer            Neo_Sean_Player                  2.02
+  RandomPlayer           RandomPlayer                     4.61
+  RandomPlayer           TolerantPlayer                   4.27
+  RandomPlayer           FreakyPlayer                     3.76
+  RandomPlayer           T4TPlayer                        3.99
+  RandomPlayer           Neo_Sean_Player                  3.66
+  TolerantPlayer         TolerantPlayer                   6.00
+  TolerantPlayer         FreakyPlayer                     3.61
+  TolerantPlayer         T4TPlayer                        6.00
+  TolerantPlayer         Neo_Sean_Player                  6.00
+  FreakyPlayer           FreakyPlayer                     4.78
+  FreakyPlayer           T4TPlayer                        5.20
+  FreakyPlayer           Neo_Sean_Player                  2.82
+  T4TPlayer              T4TPlayer                        6.00
+  T4TPlayer              Neo_Sean_Player                  6.00
+  Neo_Sean_Player        Neo_Sean_Player                  6.00
+
+  Legend:
+  6.00  = full mutual cooperation sustained
+  ~5.xx = one defector detected; Neo defects back, limiting loss
+  3-4   = mixed/noisy environment, olive branch partially recovers
+  ~2.xx = all-defect equilibrium (chronic defectors present)
